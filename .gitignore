@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Uygulama yerel durumu ve çıktılar (repoya girmemeli)
+kap_risk_izleme_gecmis.json
+kap_risk_raporu.csv
+KAP_Risk_Raporu_*.xlsx
+KAP_Risk_Bulgular_*.csv
+
+# Editör / işletim sistemi
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+.claude/
