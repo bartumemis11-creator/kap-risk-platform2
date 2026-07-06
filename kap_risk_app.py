@@ -99,7 +99,7 @@ RISK_CATEGORIES = {
     "regulator":  ("Regülatör Cezası / Yaptırım", 7),
     "faaliyet":   ("Faaliyet / Üretim Riski", 5),
     "yonetim":    ("Yönetim / Genel Kurul Riski", 5),
-    "varlik_satisi": ("Varlık Satışı / Nakit Yaratma", 4),
+    "varlik_satisi": ("Varlık Satışı / Teminat-Rehin", 4),
     "karlilik":   ("Kârlılık / Temettü Sinyali", 4),
     "dava":       ("Önemli Dava / Tahkim", 4),
     "piyasa_tedbir": ("Piyasa Tedbirleri", 3),
@@ -162,11 +162,12 @@ RISK_RULES = [
                    "bddk", "epdk", "masak", "spk tarafindan ceza",
                    "kurul tarafindan verilen ceza", "para cezasi uygulan",
                    "yaptirim", "sorusturma acil", "sorusturma baslat",
-                   "limit asimi"]),
+                   "limit asimi", "sirketin uyaril", "uyari verilmesi"]),
     ("faaliyet", ["uretim durdur", "uretime ara", "faaliyet durdur",
                   "faaliyetlerin durdurulmasi", "fabrika kapat", "is durdurma",
                   "grev", "lokavt", "yangin", "patlama", "is kazasi",
-                  "lisans iptal", "ruhsat iptal"]),
+                  "lisans iptal", "ruhsat iptal",
+                  "sube kapanis", "subelerin kapat", "magaza kapanis"]),
     ("yonetim", ["istifa", "gorevinden ayril", "gorevden alin",
                  "genel mudur degisik", "yonetim kurulu uyeliginden",
                  "nisabinin saglanamamas", "nisap saglanamadigi",
@@ -188,7 +189,14 @@ RISK_RULES = [
                        "bagli ortaklik satisi", "bagli ortaklik paylarinin satisi",
                        "varliklarin satisi", "maddi duran varlik satis",
                        "arsa satisi", "fabrika satisi",
-                       "tahsili gecikmis alacak"]),
+                       "tahsili gecikmis alacak",
+                       # "satım" yazım varyantı (piyasa taramasında kaçtı:
+                       # 'Maddi Duran Varlık Satımı — ofis satışı')
+                       "duran varlik satim", "varlik satimi",
+                       "gayrimenkul satimi", "tasinmaz satimi",
+                       # borç teminatı olarak ipotek/rehin tesisi
+                       "ipotek tesis", "rehin tesis", "ipotek verilmesi",
+                       "rehin verilmesi", "ipotek edilmesi"]),
     ("dava", ["dava acil", "dava acti", "aleyhine dava", "aleyhine acilan dava",
               "davanin kabul", "tahkim", "arabuluculuk basvuru",
               "tazminat davasi"]),
@@ -747,7 +755,9 @@ def _needs_detail(basic: dict) -> bool:
         return False
     if any(k in text for k in RATING_TRIGGERS):
         return True
-    broad = ["ozel durum aciklamasi", "duyuru", "aciklama"]
+    # "Faaliyetlerin Kısmen veya Tamamen Durdurulması" şablonu başlıkta
+    # "açıklama" içermediğinden derin okumaya girmiyordu — "durdurul" eklendi
+    broad = ["ozel durum aciklamasi", "duyuru", "aciklama", "durdurul"]
     all_kw = [kw for _, kws in RISK_RULES for kw in kws]
     return any(k in text for k in all_kw) or any(b in text for b in broad)
 
