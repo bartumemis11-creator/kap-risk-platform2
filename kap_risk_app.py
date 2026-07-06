@@ -1108,7 +1108,7 @@ def inject_css():
 def hero():
     st.markdown(f"""
     <div class="hero">
-      <h1>🛡️ KAP Risk İzleme ve Erken Uyarı Platformu</h1>
+      <h1>🛡️ KAP Risk ve Erken Uyarı Platformu</h1>
       <p>Temerrüt · Ödeme performansı · Yakın izleme · Yeniden yapılandırma ·
          İflas/Tasfiye · Regülatör cezaları · İhaleye fesat · Derecelendirme —
          {datetime.now().strftime('%d.%m.%Y %H:%M')} itibarıyla kap.org.tr canlı verisi</p>
