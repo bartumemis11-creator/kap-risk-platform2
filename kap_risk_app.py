@@ -1095,13 +1095,71 @@ def build_excel(results: list, years: tuple, deep: bool,
 def inject_css():
     st.markdown("""
     <style>
-      .hero {background: linear-gradient(120deg,#1e3a8a 0%,#312e81 55%,#7f1d1d 100%);
-             padding: 26px 34px; border-radius: 14px; color: white; margin-bottom: 18px;}
-      .hero h1 {margin: 0; font-size: 1.9rem;}
-      .hero p {margin: 6px 0 0 0; opacity: .85; font-size: .95rem;}
-      div[data-testid="stMetric"] {background: #f8fafc; border: 1px solid #e2e8f0;
-             padding: 12px 16px; border-radius: 12px;}
-      .stTabs [data-baseweb="tab"] {font-weight: 600;}
+      /* zemin: yumuşak degrade */
+      [data-testid="stAppViewContainer"] {
+        background: linear-gradient(180deg,#eef2ff 0%,#f4f6fb 240px,#f4f6fb 100%);
+      }
+      [data-testid="stHeader"] {background: transparent;}
+      /* kenar çubuğu: koyu lacivert panel */
+      [data-testid="stSidebar"] {
+        background: linear-gradient(180deg,#0f172a 0%,#1e1b4b 100%);
+      }
+      [data-testid="stSidebar"] * {color: #e2e8f0;}
+      [data-testid="stSidebar"] .stCaption, [data-testid="stSidebar"] small
+        {color: #94a3b8 !important;}
+      [data-testid="stSidebar"] [data-baseweb="tag"]
+        {background: #4338ca; border-radius: 8px;}
+      [data-testid="stSidebar"] [data-baseweb="select"] > div,
+      [data-testid="stSidebar"] [data-baseweb="input"] > div,
+      [data-testid="stSidebar"] input
+        {background: #1e293b !important; color: #e2e8f0 !important;
+         border-color: #334155 !important;}
+      /* hero */
+      .hero {background: linear-gradient(120deg,#1e3a8a 0%,#4338ca 55%,#7c3aed 100%);
+             padding: 24px 32px; border-radius: 16px; color: white;
+             margin-bottom: 16px; box-shadow: 0 8px 28px rgba(67,56,202,.25);}
+      .hero h1 {margin: 0; font-size: 1.75rem; letter-spacing: -.5px;}
+      .hero p {margin: 6px 0 0 0; opacity: .85; font-size: .9rem;}
+      /* metrik kartları */
+      div[data-testid="stMetric"] {
+        background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #4338ca;
+        padding: 14px 18px; border-radius: 14px;
+        box-shadow: 0 2px 10px rgba(15,23,42,.05);
+      }
+      /* sekmeler: hap görünümü */
+      .stTabs [data-baseweb="tab-list"] {gap: 6px;}
+      .stTabs [data-baseweb="tab"] {
+        font-weight: 600; background: #ffffff; border-radius: 9999px;
+        padding: 6px 18px; border: 1px solid #e2e8f0;
+      }
+      .stTabs [aria-selected="true"] {
+        background: #4338ca !important; color: #ffffff !important;
+        border-color: #4338ca !important;
+      }
+      .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"]
+        {display: none;}
+      /* genişleticiler ve tablolar (yalnız ana alan) */
+      [data-testid="stMain"] details[data-testid="stExpander"] {
+        background: #ffffff; border: 1px solid #e2e8f0 !important;
+        border-radius: 14px !important; overflow: hidden;
+      }
+      /* kenar çubuğundaki uyarı/hata kutuları okunur kalsın */
+      [data-testid="stSidebar"] [data-testid="stAlert"],
+      [data-testid="stSidebar"] [data-testid="stAlert"] *
+        {color: #7f1d1d !important;}
+      [data-testid="stDataFrame"] {border-radius: 12px; overflow: hidden;
+        border: 1px solid #e2e8f0;}
+      /* birincil düğme */
+      .stButton > button[kind="primary"], .stDownloadButton > button {
+        background: linear-gradient(120deg,#4338ca,#7c3aed);
+        border: none; border-radius: 10px; font-weight: 700;
+      }
+      .stButton > button[kind="primary"]:hover {filter: brightness(1.1);}
+      /* boş durum kartı */
+      .empty-card {background: #ffffff; border: 1px dashed #c7d2fe;
+        border-radius: 16px; padding: 34px; text-align: center;
+        color: #334155; margin-top: 8px;}
+      .empty-card b {color: #4338ca;}
     </style>""", unsafe_allow_html=True)
 
 
@@ -1109,10 +1167,46 @@ def hero():
     st.markdown(f"""
     <div class="hero">
       <h1>🛡️ KAP Risk ve Erken Uyarı Platformu</h1>
-      <p>Temerrüt · Ödeme performansı · Yakın izleme · Yeniden yapılandırma ·
-         İflas/Tasfiye · Regülatör cezaları · İhaleye fesat · Derecelendirme —
-         {datetime.now().strftime('%d.%m.%Y %H:%M')} itibarıyla kap.org.tr canlı verisi</p>
+      <p>Temerrüt · Yakın izleme · Yeniden yapılandırma · Regülatör cezaları ·
+         Derecelendirme — {datetime.now().strftime('%d.%m.%Y %H:%M')} ·
+         kap.org.tr canlı verisi</p>
     </div>""", unsafe_allow_html=True)
+
+
+AUTO_FIRST_SCAN_SECONDS = 60      # açılıştan sonra ilk otomatik derin tarama
+AUTO_REFRESH_SECONDS = 3600       # sonrasında saat başı yenileme
+
+
+@st.fragment(run_every="20s")
+def _auto_scan_ticker():
+    """Açılışın 1. dakikasında otomatik derin tarama başlatır, ardından
+    her saat başı taramayı yeniler. Geri sayımı kenar çubuğunda gösterir."""
+    now = time.time()
+    boot = st.session_state.setdefault("boot_ts", now)
+    if not st.session_state.get("auto_ready", True):
+        # kullanıcı elle seçim yapıyor ve liste boş: tetikleme, bekle
+        st.caption("☝️ Otomatik tarama için şirket seçin")
+        return
+    if st.session_state.get("auto_pending"):
+        st.caption("⏳ Otomatik tarama sırada...")
+        return
+    meta = st.session_state.get("scan_meta")
+    if meta is None:
+        remain = AUTO_FIRST_SCAN_SECONDS - (now - boot)
+        if remain <= 0:
+            st.session_state["auto_pending"] = True
+            st.rerun(scope="app")
+        else:
+            st.caption(f"⏳ Otomatik derin tarama **{int(remain)} sn** "
+                       "içinde başlayacak")
+    else:
+        elapsed = (datetime.now() - meta["ts"]).total_seconds()
+        if elapsed >= AUTO_REFRESH_SECONDS:
+            st.session_state["auto_pending"] = True
+            st.rerun(scope="app")
+        else:
+            nxt = (meta["ts"] + timedelta(seconds=AUTO_REFRESH_SECONDS))
+            st.caption(f"🔄 Sonraki otomatik yenileme: **{nxt:%H:%M}**")
 
 
 def executive_summary_text(results):
@@ -1560,14 +1654,18 @@ def main():
     with st.sidebar:
         st.header("⚙️ Tarama Parametreleri")
         try:
-            directory = fetch_member_directory()
+            # rehberi oturum boyunca sabitle: 24 saatlik önbellek tazelenince
+            # seçenek etiketleri kayıp kullanıcı seçimini sıfırlamasın
+            if "dir_df" not in st.session_state:
+                st.session_state["dir_df"] = fetch_member_directory()
+            directory = st.session_state["dir_df"]
         except Exception as exc:
             st.error(f"KAP şirket listesi alınamadı: {exc}")
+            # otomatik döngü kilitlenmesin: bayrağı temizle, zamanlayıcıyı
+            # kayıtlı tut — bir sonraki tikte yeniden denenir
+            st.session_state.pop("auto_pending", None)
+            _auto_scan_ticker()
             st.stop()
-        st.caption(f"KAP'tan otomatik çekilen üye listesi: "
-                   f"**{len(directory)}** kayıt (işlem görmeyen/kodsuz "
-                   "ihraççılar dahil — `*` ile işaretli)")
-
         options, opt_to_oid, oid_to_opt = [], {}, {}
         for row in directory.itertuples():
             kod = row.kodlar if len(str(row.kodlar)) <= 18 else row.hisse
@@ -1576,28 +1674,35 @@ def main():
             opt_to_oid[label] = row.oid
             oid_to_opt[row.oid] = label
 
-        select_all = st.checkbox("🌐 Tümünü seç (KAP üyelerinin tamamı)")
         default_oids, media_terms = resolve_default_members(directory)
         default_opts = [oid_to_opt[o] for o in default_oids
                         if o in oid_to_opt]
-        # tek widget + sabit key: 'Tümünü seç' aç/kapa yapılınca elle
-        # yapılmış seçim kaybolmasın
-        manual = st.multiselect(
-            "Şirketler", options, default=default_opts, key="company_sel",
-            disabled=select_all,
-            placeholder="Hisse kodu veya unvan yazarak arayın...",
-            help="'Tümünü seç' aktifken bu liste devre dışıdır.")
-        if select_all:
-            st.info(f"{len(options)} üyenin tamamı taranacak. Bu işlem "
-                    "uzun sürebilir (~1 sn/şirket-yıl).")
-            selected_opts = options
-        else:
-            selected_opts = manual
-        if media_terms:
-            st.caption("📡 KAP üyesi bulunamayan gruplar yalnızca **medya "
-                       "taramasında** izlenir: " + ", ".join(media_terms))
 
-        today = date.today()
+        preset_on = st.checkbox(
+            f"📌 Varsayılan izleme listesi ({len(default_opts)} üye)",
+            value=True,
+            help="Tiki kaldırırsanız listeden dilediğiniz üyeleri "
+                 "ekleyip çıkarabilirsiniz.")
+        select_all = st.checkbox("🌐 Tümünü seç "
+                                 f"({len(options)} KAP üyesi)")
+        if preset_on or select_all:
+            manual = default_opts
+        else:
+            manual = st.multiselect(
+                "Şirketler", options, default=default_opts,
+                key="company_sel",
+                placeholder="Hisse kodu veya unvan yazın...")
+        selected_opts = (options if select_all
+                         else (default_opts if preset_on else manual))
+        with st.expander("ℹ️ İzleme evreni"):
+            st.caption(f"KAP rehberi: **{len(directory)}** üye (kodsuz "
+                       "ihraççılar `*` işaretli). KAP üyesi olmayan "
+                       f"**{len(media_terms)}** grup yalnızca medya "
+                       "taramasında izlenir: " + ", ".join(media_terms))
+
+        # tarihi oturum boyunca sabitle: gece yarısı geçişinde widget
+        # kimliği değişip kullanıcının aralığı sıfırlanmasın
+        today = st.session_state.setdefault("session_today", date.today())
         dr = st.date_input(
             "Tarama aralığı (elle tarih girebilirsiniz)",
             value=(date(today.year - 2, 1, 1), today),
@@ -1630,14 +1735,18 @@ def main():
         run = st.button("🔍 Taramayı Başlat", type="primary",
                         use_container_width=True,
                         disabled=not selected_opts)
-        st.caption("Veriler kap.org.tr'den canlı çekilir ve 1 saat "
-                   "önbelleklenir. Rapor yatırım tavsiyesi değildir.")
+        st.session_state["auto_ready"] = bool(selected_opts)
+        _auto_scan_ticker()
 
-    if run:
+    auto_due = st.session_state.pop("auto_pending", False)
+    if (run or auto_due) and selected_opts:
         sel_oids = {opt_to_oid[o] for o in selected_opts if o in opt_to_oid}
         members = directory[directory.oid.isin(sel_oids)].to_dict("records")
         results = []
-        date_range = (d_start, d_end)
+        # bitiş "bugün" seçiliyse gece yarısı sonrası taramalarda gerçek
+        # bugüne genişlet (widget kimliği için tarih donduruldu)
+        eff_end = date.today() if d_end >= today else d_end
+        date_range = (d_start, eff_end)
         prog = st.progress(0.0)
         status = st.status(f"{len(members)} şirket taranıyor...",
                            expanded=True)
@@ -1714,13 +1823,16 @@ def main():
                          meta["deep"], st.session_state.get("news", []),
                          meta.get("range"))
     else:
-        st.info("👈 Kenar çubuğundan şirketleri seçin ve **Taramayı Başlat**'a "
-                "tıklayın. Şirket listesi KAP'tan otomatik çekilir; arama "
-                "kutusuna hisse kodu ya da unvan yazabilirsiniz.")
-        with st.expander("ℹ️ Bu platform neyi tespit eder?"):
-            st.markdown("\n".join(
-                f"- **{label}** (ağırlık {w}/10)"
-                for label, w in RISK_CATEGORIES.values()))
+        st.markdown("""
+        <div class="empty-card">
+          <div style="font-size:2.2rem;">🛰️</div>
+          <p style="margin:10px 0 4px 0;font-size:1.05rem;">
+            Varsayılan izleme listesi için <b>otomatik derin tarama</b>
+            birazdan başlayacak.</p>
+          <p style="margin:0;font-size:.9rem;color:#64748b;">
+            Beklemek istemiyorsanız soldan <b>Taramayı Başlat</b>'a
+            tıklayabilirsiniz.</p>
+        </div>""", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
