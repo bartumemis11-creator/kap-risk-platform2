@@ -1349,6 +1349,83 @@ def inject_css():
       }
       .empty-card b {color: var(--navy-600);}
 
+      .risk-card, .news-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 10px rgba(15,23,42,.035);
+      }
+      .risk-card {
+        border-left: 4px solid var(--gray-500);
+      }
+      .news-card {
+        border-left: 4px solid var(--navy-600);
+      }
+      .card-topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: baseline;
+      }
+      .card-company {
+        font-weight: 760;
+        color: var(--navy-700);
+      }
+      .card-date {
+        color: var(--gray-500);
+        font-size: .84rem;
+      }
+      .badge-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 7px 0 5px 0;
+      }
+      .badge {
+        border-radius: 6px;
+        font-size: .72rem;
+        font-weight: 760;
+        padding: 2px 8px;
+        line-height: 1.45;
+      }
+      .badge-muted {
+        background: var(--gray-100);
+        color: var(--gray-700);
+      }
+      .badge-new {
+        background: #e8f5ee;
+        color: #166534;
+      }
+      .badge-source {
+        color: var(--gray-500);
+        font-size: .76rem;
+        align-self: center;
+      }
+      .card-title {
+        color: var(--gray-950);
+        font-weight: 720;
+        margin-top: 7px;
+      }
+      .card-summary {
+        color: var(--gray-700);
+        font-size: .9rem;
+        margin-top: 3px;
+      }
+      .card-link {
+        display: inline-block;
+        color: var(--navy-600);
+        font-size: .84rem;
+        font-weight: 760;
+        margin-top: 7px;
+        text-decoration: none;
+      }
+      .card-link:hover {
+        text-decoration: underline;
+      }
+
       @media (max-width: 720px) {
         [data-testid="stMain"] .block-container {
           padding-left: 1rem;
@@ -1386,10 +1463,10 @@ def _auto_scan_ticker():
     boot = st.session_state.setdefault("boot_ts", now)
     if not st.session_state.get("auto_ready", True):
         # kullanıcı elle seçim yapıyor ve liste boş: tetikleme, bekle
-        st.caption("☝️ Otomatik tarama için şirket seçin")
+        st.caption("Otomatik tarama için şirket seçin")
         return
     if st.session_state.get("auto_pending"):
-        st.caption("⏳ Otomatik tarama sırada...")
+        st.caption("Otomatik tarama sırada...")
         return
     meta = st.session_state.get("scan_meta")
     if meta is None:
@@ -1398,7 +1475,7 @@ def _auto_scan_ticker():
             st.session_state["auto_pending"] = True
             st.rerun(scope="app")
         else:
-            st.caption(f"⏳ Otomatik derin tarama **{int(remain)} sn** "
+            st.caption(f"Otomatik derin tarama **{int(remain)} sn** "
                        "içinde başlayacak")
     else:
         elapsed = (datetime.now() - meta["ts"]).total_seconds()
@@ -1407,7 +1484,7 @@ def _auto_scan_ticker():
             st.rerun(scope="app")
         else:
             nxt = (meta["ts"] + timedelta(seconds=AUTO_REFRESH_SECONDS))
-            st.caption(f"🔄 Sonraki otomatik yenileme: **{nxt:%H:%M}**")
+            st.caption(f"Sonraki otomatik yenileme: **{nxt:%H:%M}**")
 
 
 def executive_summary_text(results):
@@ -1557,53 +1634,40 @@ def _feed_card(f) -> str:
     """Tek bulgu için KAP görünümlü HTML kart (tıklayınca KAP'ta açılır)."""
     fg, bg = _SEV_CARD.get(f["siddet"], ("#334155", "#f1f5f9"))
     esc = html_lib.escape
-    yeni = ('<span style="background:#dcfce7;color:#166534;padding:1px 8px;'
-            'border-radius:9999px;font-size:.72rem;font-weight:700;'
-            'margin-left:6px;">🆕 YENİ</span>') if f.get("yeni") else ""
-    pg = (' <span style="color:#64748b;font-size:.75rem;">(BIST/SPK piyasa '
-          'duyurusu)</span>') if f.get("piyasa_geneli") else ""
+    yeni = '<span class="badge badge-new">YENİ</span>' if f.get("yeni") else ""
+    pg = ('<span class="badge-source">BIST/SPK piyasa duyurusu</span>'
+          if f.get("piyasa_geneli") else "")
     ozet = esc(f["ozet"][:220]) if f["ozet"] else ""
     return f"""
-<div style="border:1px solid #e2e8f0;border-left:5px solid {fg};
-     border-radius:10px;background:#ffffff;padding:12px 16px;
-     margin-bottom:10px;">
-  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
-    <span style="font-weight:700;color:#1e3a8a;">{esc(f["hisse"])} —
+<div class="risk-card" style="border-left-color:{fg};">
+  <div class="card-topline">
+    <span class="card-company">{esc(f["hisse"])} —
       {esc(f["sirket"][:55])}</span>
-    <span style="color:#64748b;font-size:.85rem;">{esc(f["tarih_str"])}</span>
+    <span class="card-date">{esc(f["tarih_str"])}</span>
   </div>
-  <div style="margin:6px 0 2px 0;">
-    <span style="background:{bg};color:{fg};padding:1px 10px;
-          border-radius:9999px;font-size:.75rem;font-weight:700;">
+  <div class="badge-row">
+    <span class="badge" style="background:{bg};color:{fg};">
       {esc(f["siddet"])}</span>
-    <span style="background:#f1f5f9;color:#334155;padding:1px 10px;
-          border-radius:9999px;font-size:.75rem;font-weight:600;
-          margin-left:6px;">{esc(f["kategori"])}</span>{yeni}{pg}
+    <span class="badge badge-muted">{esc(f["kategori"])}</span>{yeni}{pg}
   </div>
-  <div style="font-weight:600;margin-top:6px;color:#0f172a;">
-    {esc(f["baslik"][:120])}</div>
-  <div style="color:#334155;font-size:.9rem;margin-top:2px;">{ozet}</div>
-  <a href="{esc(f["link"])}" target="_blank"
-     style="font-size:.85rem;font-weight:600;">🔗 Bildirimi KAP'ta aç ↗</a>
+  <div class="card-title">{esc(f["baslik"][:120])}</div>
+  <div class="card-summary">{ozet}</div>
+  <a class="card-link" href="{esc(f["link"])}" target="_blank">
+     Bildirimi KAP'ta aç</a>
 </div>"""
 
 
 def _news_card(n) -> str:
     esc = html_lib.escape
     return f"""
-<div style="border:1px solid #e2e8f0;border-left:5px solid #6d28d9;
-     border-radius:10px;background:#ffffff;padding:10px 16px;
-     margin-bottom:8px;">
-  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;">
-    <span style="font-weight:700;color:#6d28d9;">{esc(n["hisse"])}
-      <span style="color:#64748b;font-weight:400;font-size:.8rem;">·
-      {esc(n.get("kaynak") or "medya")}</span></span>
-    <span style="color:#64748b;font-size:.85rem;">{esc(n["tarih_str"])}</span>
+<div class="news-card">
+  <div class="card-topline">
+    <span class="card-company">{esc(n["hisse"])}
+      <span class="badge-source">· {esc(n.get("kaynak") or "medya")}</span></span>
+    <span class="card-date">{esc(n["tarih_str"])}</span>
   </div>
-  <div style="font-weight:600;margin-top:4px;color:#0f172a;">
-    {esc(n["baslik"][:140])}</div>
-  <a href="{esc(n["link"])}" target="_blank"
-     style="font-size:.85rem;font-weight:600;">🔗 Haberi aç ↗</a>
+  <div class="card-title">{esc(n["baslik"][:140])}</div>
+  <a class="card-link" href="{esc(n["link"])}" target="_blank">Haberi aç</a>
 </div>"""
 
 
@@ -1646,8 +1710,8 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
     } for r in ok]).sort_values("Skor", ascending=False)
 
     tab1, tab_feed, tab2, tab3, tab4 = st.tabs(
-        ["📊 Yönetici Özeti", "📰 Bildirim Akışı", "🏢 Şirket Detayları",
-         "📋 Tüm Bulgular", "📥 Rapor İndir"])
+        ["Yönetici Özeti", "Bildirim Akışı", "Şirket Detayları",
+         "Tüm Bulgular", "Rapor İndir"])
 
     # ─── Bildirim akışı (KAP formatında kötü haber akışı) ───
     with tab_feed:
@@ -1656,7 +1720,7 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
         fc1, fc2, fc3 = st.columns([2, 1, 1])
         f_sev = fc1.multiselect("Şiddet", list(SEVERITY_ORDER),
                                 default=list(SEVERITY_ORDER), key="feed_sev")
-        f_new = fc2.checkbox("Sadece 🆕 yeni bulgular", key="feed_new",
+        f_new = fc2.checkbox("Sadece yeni bulgular", key="feed_new",
                              help="Bir önceki taramada olmayan bulgular")
         f_lim = fc3.select_slider("Gösterilecek kayıt", [40, 80, 150, 300],
                                   value=80, key="feed_lim")
@@ -1675,7 +1739,7 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
                        "(tamamı Excel raporunda).")
         if news:
             st.markdown("---")
-            st.markdown("### 📡 Medya Sinyalleri (Google News)")
+            st.markdown("### Medya Sinyalleri")
             st.caption("Ulusal basında risk temalı haberler — skora dahil "
                        "edilmez, teyit için KAP bildirimleriyle birlikte "
                        "değerlendirin.")
@@ -1809,7 +1873,7 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
                     and (not cat_sel or f["kategori"] in cat_sel)
                     and (not co_sel or f["hisse"] in co_sel)]
             bdf = pd.DataFrame([{
-                "🆕": "🆕" if f.get("yeni") else "",
+                "Yeni": "Evet" if f.get("yeni") else "",
                 "Hisse": f["hisse"], "Tarih": f["tarih_str"],
                 "Şiddet": f["siddet"], "Kategori": f["kategori"],
                 "Başlık": f["baslik"][:80], "Özet": f["ozet"][:120],
@@ -1827,7 +1891,7 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
 
     # ─── İndir ───
     with tab4:
-        st.markdown("### 📥 Yapılandırılmış Risk Yönetimi Raporu")
+        st.markdown("### Yapılandırılmış Risk Yönetimi Raporu")
         st.markdown(
             "Excel raporu 5 sayfadan oluşur: **Yönetici Özeti** (skor kartı), "
             "**Risk Bulguları** (şiddet renklendirmeli, filtrelenebilir), "
@@ -1844,7 +1908,7 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
         stamp = datetime.now().strftime("%Y%m%d_%H%M")
         if xls:
             st.download_button(
-                "⬇️ Excel Raporu İndir (.xlsx)", data=xls,
+                "Excel Raporu İndir (.xlsx)", data=xls,
                 file_name=f"KAP_Risk_Raporu_{stamp}.xlsx",
                 mime=("application/vnd.openxmlformats-officedocument"
                       ".spreadsheetml.sheet"),
@@ -1856,20 +1920,20 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
                                     for k, v in f.items() if k != "tarih"}
                                    for f in allf])
             st.download_button(
-                "⬇️ Ham Bulgular (.csv)",
+                "Ham Bulgular (.csv)",
                 data=csv_df.to_csv(index=False).encode("utf-8-sig"),
                 file_name=f"KAP_Risk_Bulgular_{stamp}.csv", mime="text/csv")
 
 
 def main():
     st.set_page_config(page_title="KAP Risk İzleme Platformu",
-                       page_icon="🛡️", layout="wide")
+                       page_icon="K", layout="wide")
     inject_css()
     hero()
 
     # ── kenar çubuğu: parametreler ──
     with st.sidebar:
-        st.header("⚙️ Tarama Parametreleri")
+        st.header("Tarama Parametreleri")
         try:
             # rehberi oturum boyunca sabitle: 24 saatlik önbellek tazelenince
             # seçenek etiketleri kayıp kullanıcı seçimini sıfırlamasın
@@ -1896,11 +1960,11 @@ def main():
                         if o in oid_to_opt]
 
         preset_on = st.checkbox(
-            f"📌 Varsayılan izleme listesi ({len(default_opts)} üye)",
+            f"Varsayılan izleme listesi ({len(default_opts)} üye)",
             value=True,
             help="Tiki kaldırırsanız listeden dilediğiniz üyeleri "
                  "ekleyip çıkarabilirsiniz.")
-        select_all = st.checkbox("🌐 Tümünü seç "
+        select_all = st.checkbox("Tümünü seç "
                                  f"({len(options)} KAP üyesi)")
         if preset_on or select_all:
             manual = default_opts
@@ -1911,7 +1975,7 @@ def main():
                 placeholder="Hisse kodu veya unvan yazın...")
         selected_opts = (options if select_all
                          else (default_opts if preset_on else manual))
-        with st.expander("ℹ️ İzleme evreni"):
+        with st.expander("İzleme evreni"):
             st.caption(f"KAP rehberi: **{len(directory)}** üye (kodsuz "
                        "ihraççılar `*` işaretli). KAP üyesi olmayan "
                        f"**{len(media_terms)}** grup yalnızca medya "
@@ -1944,12 +2008,12 @@ def main():
             index=0).startswith("Derin")
 
         news_on = st.checkbox(
-            "📡 İnternet haberlerini de tara (Google News)", value=True,
+            "İnternet haberlerini de tara (Google News)", value=True,
             help="Her şirket için ulusal basında temerrüt/konkordato/"
                  "yasak vb. temalı haberler aranır. Skora dahil edilmez, "
                  "bilgilendirme amaçlıdır.")
 
-        run = st.button("🔍 Taramayı Başlat", type="primary",
+        run = st.button("Taramayı Başlat", type="primary",
                         use_container_width=True,
                         disabled=not selected_opts)
         st.session_state["auto_ready"] = bool(selected_opts)
@@ -2003,7 +2067,7 @@ def main():
         if news_on:
             targets = sorted((r for r in results if "hata" not in r),
                              key=lambda x: -x["skor"])[:40]
-            status.write(f"📡 {len(targets)} şirket + "
+            status.write(f"{len(targets)} şirket + "
                          f"{len(media_terms)} KAP-dışı grup için medya "
                          "taraması...")
             jobs = [(company_short_name(r["member"]["unvan"]),
@@ -2053,8 +2117,7 @@ def main():
     else:
         st.markdown("""
         <div class="empty-card">
-          <div style="font-size:2.2rem;">🛰️</div>
-          <p style="margin:10px 0 4px 0;font-size:1.05rem;">
+          <p style="margin:0 0 4px 0;font-size:1.05rem;">
             Varsayılan izleme listesi için <b>otomatik derin tarama</b>
             birazdan başlayacak.</p>
           <p style="margin:0;font-size:.9rem;color:#64748b;">
