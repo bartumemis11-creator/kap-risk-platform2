@@ -39,6 +39,7 @@ import requests
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import altair as alt
 import openpyxl
@@ -64,6 +65,11 @@ EARLIEST_YEAR = 2015           # tarih seçicinin alt sınırı
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                           "kap_risk_izleme_gecmis.json")
+
+try:
+    ISTANBUL_TZ = ZoneInfo("Europe/Istanbul")
+except Exception:
+    ISTANBUL_TZ = timezone(timedelta(hours=3))
 
 # Google News RSS sorgusunda aranan risk terimleri
 NEWS_TERMS = ('(temerrüt OR konkordato OR iflas OR haciz OR "işlem yasağı" '
@@ -940,7 +946,7 @@ def scan_company(member: dict, years: tuple, deep: bool,
     }
     if not disclosures and fetch_fails:
         # hiç veri alınamadı → "temiz" değil, veri sorunu
-        result.update({"not": "-", "seviye": "VERİ ALINAMADI",
+        result.update({"not": "-", "seviye": "VERİ EKSİK / KONTROL GEREKLİ",
                        "emoji": "⚠️", "renk": "#64748b"})
     return result
 
@@ -1486,21 +1492,38 @@ def hero():
       <div class="hero-eyebrow">Kurumsal Risk İzleme</div>
       <h1>KAP Erken Uyarı</h1>
       <p>Temerrüt, yakın izleme, yeniden yapılandırma, regülatör cezası ve
-         derecelendirme sinyalleri · {datetime.now().strftime('%d.%m.%Y %H:%M')}
+         derecelendirme sinyalleri · {_format_tr_time(datetime.now(timezone.utc))}
          · kap.org.tr canlı verisi</p>
     </div>""", unsafe_allow_html=True)
 
 
-def _format_status_time(value) -> str:
-    """UI için tarih/saat biçimlendir; hatada güvenli fallback döndür."""
+def _to_istanbul(value) -> datetime | None:
+    """UTC/aware/naive değeri Istanbul saatine çevir; hatada None döndür."""
     try:
         if isinstance(value, str):
             value = datetime.fromisoformat(value)
         if isinstance(value, datetime):
-            return value.strftime("%d.%m.%Y %H:%M")
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            return value.astimezone(ISTANBUL_TZ)
     except Exception:
-        pass
-    return "Henüz yok"
+        return None
+    return None
+
+
+def _format_tr_time(value, fallback: str = "Henüz yok") -> str:
+    """UI için Türkiye formatında tarih/saat göster."""
+    dt = _to_istanbul(value)
+    if dt:
+        return dt.strftime("%d.%m.%Y %H:%M")
+    return fallback
+
+
+def _format_tr_clock(value, fallback: str = "30 dk içinde") -> str:
+    dt = _to_istanbul(value)
+    if dt:
+        return dt.strftime("%H:%M")
+    return fallback
 
 
 def _latest_scan_from_file() -> datetime | None:
@@ -1530,8 +1553,8 @@ def _system_status_values() -> dict:
                 seconds=AUTO_REFRESH_SECONDS)
         return {
             "system": "Aktif",
-            "last_scan": _format_status_time(last_scan),
-            "next_scan": (_format_status_time(next_scan)
+            "last_scan": _format_tr_time(last_scan),
+            "next_scan": (_format_tr_time(next_scan)
                           if next_scan else "30 dk içinde"),
             "actions": "Çalışıyor",
         }
@@ -1604,11 +1627,12 @@ def _auto_scan_ticker():
             st.rerun(scope="app")
         else:
             nxt = (meta["ts"] + timedelta(seconds=AUTO_REFRESH_SECONDS))
-            st.caption(f"Sonraki otomatik yenileme: **{nxt:%H:%M}**")
+            st.caption(f"Sonraki otomatik yenileme: **{_format_tr_clock(nxt)}**")
 
 
 def executive_summary_text(results):
-    no_data = [r for r in results if r["seviye"] in ("VERİ ALINAMADI", "HATA")]
+    no_data = [r for r in results if r["seviye"] in (
+        "VERİ ALINAMADI", "VERİ EKSİK / KONTROL GEREKLİ", "HATA")]
     results = [r for r in results if r not in no_data]
     total_f = sum(len(r["findings"]) for r in results)
     crit = [r for r in results if r["not"] in ("D", "E")]
@@ -1652,10 +1676,11 @@ def executive_summary_text(results):
                      "pazar çıkışı, lehte sonuç vb.) tespit edildi; detaylar "
                      "raporun ilgili bölümündedir.")
     if no_data:
-        lines.append("⚠️ **Veri alınamayan şirketler:** " +
+        lines.append("⚠️ **Veri Eksik / Kontrol Gerekli:** " +
                      ", ".join(r["member"]["hisse"] for r in no_data) +
-                     " — KAP geçici erişim kısıtlaması olabilir; birkaç "
-                     "dakika sonra taramayı yeniden çalıştırın.")
+                     " — KAP erişimi geçici olarak başarısız oldu; bu "
+                     "şirketler temiz kabul edilmedi, önceki başarılı veri "
+                     "varsa korunur.")
     return "\n\n".join(lines)
 
 
@@ -1735,7 +1760,8 @@ def _render_company_body(r):
                      column_config={"Link": st.column_config.LinkColumn(
                          "KAP", display_text="Aç")})
     elif r.get("veri_hatasi") and r["taranan"] == 0:
-        st.warning("Veri alınamadı — taramayı yeniden çalıştırın.")
+        st.warning("KAP erişimi geçici olarak başarısız oldu; şirket temiz "
+                   "kabul edilmedi, önceki başarılı veri varsa korunur.")
     else:
         st.success("Taranan dönemde risk sinyali tespit edilmedi.")
     if r["improvements"]:
@@ -1798,21 +1824,22 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
     partial = [r for r in ok
                if r.get("veri_hatasi") and r["taranan"] > 0]
     if no_data:
-        st.error(
-            "⚠️ **" + ", ".join(r["member"]["hisse"] for r in no_data) +
-            "** için KAP'tan veri alınamadı (geçici erişim kısıtlaması "
-            "olabilir). Bu şirketler 'temiz' DEĞİLDİR — birkaç dakika "
-            "bekleyip **Taramayı Başlat**'a yeniden tıklayın; başarısız "
-            "çekimler önbelleklenmez, otomatik yeniden denenir.")
+        st.warning(
+            "**Veri Eksik / Kontrol Gerekli:** " +
+            "; ".join(f"{r['member']['hisse']} için KAP erişimi geçici "
+                      "olarak başarısız oldu" for r in no_data) +
+            ". Şirket temiz kabul edilmedi; önceki başarılı veri varsa "
+            "korunur. Birkaç dakika sonra taramayı yeniden çalıştırın.")
     if partial:
         st.warning(
-            "ℹ️ " + ", ".join(r["member"]["hisse"] for r in partial) +
+            "**Veri Eksik / Kontrol Gerekli:** " +
+            ", ".join(r["member"]["hisse"] for r in partial) +
             " için bazı sorgular/bildirim detayları alınamadı (KAP geçici "
-            "kısıtlaması); sonuçlar eksik olabilir. Birkaç dakika sonra "
-            "yeniden tarama önerilir — başarısız çekimler önbelleklenmez.")
+            "kısıtlaması). Sonuçlar eksik olabilir; şirket temiz kabul "
+            "edilmez. Birkaç dakika sonra yeniden tarama önerilir.")
     failed = [r for r in results if "hata" in r]
     if failed:
-        st.error("🚫 **Taranamayan şirketler:** " + ", ".join(
+        st.warning("**Veri Eksik / Kontrol Gerekli:** " + ", ".join(
             f"{r['member']['hisse']} ({str(r.get('hata', ''))[:60]})"
             for r in failed) + " — taramayı yeniden çalıştırın.")
     if not ok:
@@ -1892,8 +1919,10 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
                     title="Risk Skoru (0-100)"),
             y=alt.Y("Hisse:N", sort="-x", title=None),
             color=alt.Color("Seviye:N", title="Seviye", scale=alt.Scale(
-                domain=["KRİTİK", "YÜKSEK", "ORTA", "DÜŞÜK", "TEMİZ"],
-                range=["#7f1d1d", "#dc2626", "#ea580c", "#ca8a04", "#16a34a"])),
+                domain=["KRİTİK", "YÜKSEK", "ORTA", "DÜŞÜK", "TEMİZ",
+                        "VERİ EKSİK / KONTROL GEREKLİ"],
+                range=["#7f1d1d", "#dc2626", "#ea580c", "#ca8a04",
+                       "#16a34a", "#64748b"])),
             tooltip=["Hisse", "Şirket", "Skor", "Not", "Bulgu"],
         ).properties(height=max(220, 34 * len(chart_df)))
         st.altair_chart(chart, use_container_width=True)
@@ -2162,7 +2191,8 @@ def main():
                 status.write(f"&nbsp;&nbsp;⚠️ {m['hisse']} taranamadı: {exc}")
                 results.append({"member": m, "taranan": 0, "findings": [],
                                 "improvements": [], "skor": 0.0, "not": "-",
-                                "seviye": "HATA", "emoji": "⚠️",
+                                "seviye": "VERİ EKSİK / KONTROL GEREKLİ",
+                                "emoji": "⚠️",
                                 "renk": "#666", "hata": str(exc)})
             prog.progress(i / len(members))
 
