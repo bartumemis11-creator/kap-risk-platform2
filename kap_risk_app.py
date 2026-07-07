@@ -1275,6 +1275,42 @@ def inject_css():
         max-width: 980px;
       }
 
+      .system-status-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: -6px 0 18px 0;
+      }
+      .system-status-card {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-radius: 8px;
+        padding: 13px 15px;
+        box-shadow: 0 4px 14px rgba(15,23,42,.04);
+      }
+      .system-status-label {
+        color: var(--gray-500);
+        font-size: .72rem;
+        font-weight: 780;
+        line-height: 1.25;
+        text-transform: uppercase;
+      }
+      .system-status-value {
+        color: var(--gray-950);
+        font-size: 1.02rem;
+        font-weight: 760;
+        margin-top: 5px;
+      }
+      .system-status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        margin-right: 7px;
+        background: #16a34a;
+        vertical-align: 1px;
+      }
+
       div[data-testid="stMetric"] {
         background: var(--white);
         border: 1px solid var(--gray-200);
@@ -1432,6 +1468,10 @@ def inject_css():
           padding-right: 1rem;
         }
         .hero {padding: 15px 16px;}
+        .system-status-grid {
+          grid-template-columns: 1fr;
+          margin-top: -4px;
+        }
         .stTabs [data-baseweb="tab"] {
           padding: 6px 10px;
           font-size: .84rem;
@@ -1449,6 +1489,86 @@ def hero():
          derecelendirme sinyalleri · {datetime.now().strftime('%d.%m.%Y %H:%M')}
          · kap.org.tr canlı verisi</p>
     </div>""", unsafe_allow_html=True)
+
+
+def _format_status_time(value) -> str:
+    """UI için tarih/saat biçimlendir; hatada güvenli fallback döndür."""
+    try:
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+        if isinstance(value, datetime):
+            return value.strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        pass
+    return "Henüz yok"
+
+
+def _latest_scan_from_file() -> datetime | None:
+    """Opsiyonel latest_scan.json varsa son tarama zamanını UI'da kullan."""
+    try:
+        path = os.path.join(os.path.dirname(__file__), "latest_scan.json")
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        raw = data.get("ts") or data.get("timestamp") or data.get("last_scan")
+        if raw:
+            return datetime.fromisoformat(str(raw))
+    except Exception:
+        return None
+    return None
+
+
+def _system_status_values() -> dict:
+    """Üst durum kartları için değerleri session state'ten güvenli şekilde oku."""
+    try:
+        meta = st.session_state.get("scan_meta") or {}
+        last_scan = meta.get("ts") or _latest_scan_from_file()
+        next_scan = None
+        if isinstance(last_scan, datetime):
+            next_scan = last_scan + timedelta(seconds=AUTO_REFRESH_SECONDS)
+        elif isinstance(last_scan, str):
+            next_scan = datetime.fromisoformat(last_scan) + timedelta(
+                seconds=AUTO_REFRESH_SECONDS)
+        return {
+            "system": "Aktif",
+            "last_scan": _format_status_time(last_scan),
+            "next_scan": (_format_status_time(next_scan)
+                          if next_scan else "30 dk içinde"),
+            "actions": "Çalışıyor",
+        }
+    except Exception:
+        return {
+            "system": "Aktif",
+            "last_scan": "Henüz yok",
+            "next_scan": "30 dk içinde",
+            "actions": "Çalışıyor",
+        }
+
+
+def render_system_status(container=None):
+    vals = _system_status_values()
+    html = f"""
+    <div class="system-status-grid">
+      <div class="system-status-card">
+        <div class="system-status-label">Sistem Durumu</div>
+        <div class="system-status-value">
+          <span class="system-status-dot"></span>{html_lib.escape(vals["system"])}
+        </div>
+      </div>
+      <div class="system-status-card">
+        <div class="system-status-label">Son Tarama</div>
+        <div class="system-status-value">{html_lib.escape(vals["last_scan"])}</div>
+      </div>
+      <div class="system-status-card">
+        <div class="system-status-label">Sonraki Tarama</div>
+        <div class="system-status-value">{html_lib.escape(vals["next_scan"])}</div>
+      </div>
+      <div class="system-status-card">
+        <div class="system-status-label">GitHub Actions</div>
+        <div class="system-status-value">{html_lib.escape(vals["actions"])}</div>
+      </div>
+    </div>"""
+    target = container if container is not None else st
+    target.markdown(html, unsafe_allow_html=True)
 
 
 AUTO_FIRST_SCAN_SECONDS = 60      # açılıştan sonra ilk otomatik derin tarama
@@ -1930,6 +2050,8 @@ def main():
                        page_icon="K", layout="wide")
     inject_css()
     hero()
+    system_status_slot = st.empty()
+    render_system_status(system_status_slot)
 
     # ── kenar çubuğu: parametreler ──
     with st.sidebar:
@@ -2108,6 +2230,8 @@ def main():
                 news=news)
         except Exception:
             st.session_state["xlsx"] = None
+
+    render_system_status(system_status_slot)
 
     if "results" in st.session_state:
         meta = st.session_state["scan_meta"]
