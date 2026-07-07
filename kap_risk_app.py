@@ -1444,7 +1444,7 @@ def hero():
     st.markdown(f"""
     <div class="hero">
       <div class="hero-eyebrow">Kurumsal Risk İzleme</div>
-      <h1>KAP Risk ve Erken Uyarı Platformu</h1>
+      <h1>KAP Erken Uyarı</h1>
       <p>Temerrüt, yakın izleme, yeniden yapılandırma, regülatör cezası ve
          derecelendirme sinyalleri · {datetime.now().strftime('%d.%m.%Y %H:%M')}
          · kap.org.tr canlı verisi</p>
