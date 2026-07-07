@@ -1167,81 +1167,210 @@ def build_excel(results: list, years: tuple, deep: bool,
 def inject_css():
     st.markdown("""
     <style>
-      /* zemin: yumuşak degrade */
+      :root {
+        --navy-900: #0b1220;
+        --navy-800: #111827;
+        --navy-700: #1f2a44;
+        --navy-600: #243b63;
+        --gray-950: #0f172a;
+        --gray-700: #334155;
+        --gray-500: #64748b;
+        --gray-300: #cbd5e1;
+        --gray-200: #e2e8f0;
+        --gray-100: #f1f5f9;
+        --gray-050: #f8fafc;
+        --white: #ffffff;
+      }
+
+      html, body, [class*="css"] {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--gray-950);
+      }
+
       [data-testid="stAppViewContainer"] {
-        background: linear-gradient(180deg,#eef2ff 0%,#f4f6fb 240px,#f4f6fb 100%);
+        background: var(--gray-050);
       }
       [data-testid="stHeader"] {background: transparent;}
-      /* kenar çubuğu: koyu lacivert panel */
-      [data-testid="stSidebar"] {
-        background: linear-gradient(180deg,#0f172a 0%,#1e1b4b 100%);
+      [data-testid="stMain"] .block-container {
+        padding-top: 1.25rem;
+        padding-bottom: 2.5rem;
+        max-width: 1440px;
       }
-      [data-testid="stSidebar"] * {color: #e2e8f0;}
+
+      h1, h2, h3 {
+        letter-spacing: 0;
+        color: var(--gray-950);
+      }
+      h3 {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-top: 1.35rem;
+      }
+      p, li, .stMarkdown {
+        line-height: 1.55;
+      }
+
+      [data-testid="stSidebar"] {
+        background: var(--navy-900);
+        border-right: 1px solid rgba(226,232,240,.12);
+      }
+      [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+        padding-top: 1rem;
+      }
+      [data-testid="stSidebar"] * {color: #e5e7eb;}
+      [data-testid="stSidebar"] h1,
+      [data-testid="stSidebar"] h2,
+      [data-testid="stSidebar"] h3 {
+        color: #f8fafc;
+        font-size: .98rem;
+        margin-bottom: .45rem;
+      }
       [data-testid="stSidebar"] .stCaption, [data-testid="stSidebar"] small
-        {color: #94a3b8 !important;}
+        {color: #a7b3c7 !important;}
+      [data-testid="stSidebar"] label,
+      [data-testid="stSidebar"] p {
+        font-size: .86rem;
+      }
       [data-testid="stSidebar"] [data-baseweb="tag"]
-        {background: #4338ca; border-radius: 8px;}
+        {background: var(--navy-600); border-radius: 6px;}
       [data-testid="stSidebar"] [data-baseweb="select"] > div,
       [data-testid="stSidebar"] [data-baseweb="input"] > div,
       [data-testid="stSidebar"] input
-        {background: #1e293b !important; color: #e2e8f0 !important;
-         border-color: #334155 !important;}
-      /* hero */
-      .hero {background: linear-gradient(120deg,#1e3a8a 0%,#4338ca 55%,#7c3aed 100%);
-             padding: 24px 32px; border-radius: 16px; color: white;
-             margin-bottom: 16px; box-shadow: 0 8px 28px rgba(67,56,202,.25);}
-      .hero h1 {margin: 0; font-size: 1.75rem; letter-spacing: -.5px;}
-      .hero p {margin: 6px 0 0 0; opacity: .85; font-size: .9rem;}
-      /* metrik kartları */
-      div[data-testid="stMetric"] {
-        background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #4338ca;
-        padding: 14px 18px; border-radius: 14px;
-        box-shadow: 0 2px 10px rgba(15,23,42,.05);
+        {background: #111827 !important; color: #f8fafc !important;
+         border-color: #2f3b52 !important; border-radius: 7px !important;}
+      [data-testid="stSidebar"] .stButton > button {
+        min-height: 2.4rem;
       }
-      /* sekmeler: hap görünümü */
+
+      .hero {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-left: 5px solid var(--navy-600);
+        padding: 18px 24px;
+        border-radius: 8px;
+        color: var(--gray-950);
+        margin-bottom: 18px;
+        box-shadow: 0 8px 24px rgba(15,23,42,.05);
+      }
+      .hero-eyebrow {
+        color: var(--navy-600);
+        font-size: .76rem;
+        font-weight: 800;
+        letter-spacing: 0;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+      }
+      .hero h1 {
+        margin: 0;
+        font-size: clamp(1.35rem, 2vw, 1.9rem);
+        line-height: 1.2;
+        letter-spacing: 0;
+        color: var(--gray-950);
+      }
+      .hero p {
+        margin: 7px 0 0 0;
+        color: var(--gray-500);
+        font-size: .92rem;
+        max-width: 980px;
+      }
+
+      div[data-testid="stMetric"] {
+        background: var(--white);
+        border: 1px solid var(--gray-200);
+        border-left: 3px solid var(--navy-600);
+        padding: 13px 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 14px rgba(15,23,42,.04);
+      }
+      div[data-testid="stMetric"] label {
+        color: var(--gray-500) !important;
+        font-size: .76rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+      }
+      div[data-testid="stMetricValue"] {
+        color: var(--gray-950);
+        font-weight: 760;
+      }
+
       .stTabs [data-baseweb="tab-list"] {gap: 6px;}
       .stTabs [data-baseweb="tab"] {
-        font-weight: 600; background: #ffffff; border-radius: 9999px;
-        padding: 6px 18px; border: 1px solid #e2e8f0;
+        font-weight: 700;
+        background: var(--white);
+        border-radius: 7px;
+        padding: 7px 14px;
+        border: 1px solid var(--gray-200);
       }
       .stTabs [aria-selected="true"] {
-        background: #4338ca !important; color: #ffffff !important;
-        border-color: #4338ca !important;
+        background: var(--navy-700) !important;
+        color: #ffffff !important;
+        border-color: var(--navy-700) !important;
       }
       .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"]
         {display: none;}
-      /* genişleticiler ve tablolar (yalnız ana alan) */
+
       [data-testid="stMain"] details[data-testid="stExpander"] {
-        background: #ffffff; border: 1px solid #e2e8f0 !important;
-        border-radius: 14px !important; overflow: hidden;
+        background: var(--white);
+        border: 1px solid var(--gray-200) !important;
+        border-radius: 8px !important;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(15,23,42,.03);
       }
-      /* kenar çubuğundaki uyarı/hata kutuları okunur kalsın */
+
       [data-testid="stSidebar"] [data-testid="stAlert"],
       [data-testid="stSidebar"] [data-testid="stAlert"] *
         {color: #7f1d1d !important;}
-      [data-testid="stDataFrame"] {border-radius: 12px; overflow: hidden;
-        border: 1px solid #e2e8f0;}
-      /* birincil düğme */
-      .stButton > button[kind="primary"], .stDownloadButton > button {
-        background: linear-gradient(120deg,#4338ca,#7c3aed);
-        border: none; border-radius: 10px; font-weight: 700;
+
+      [data-testid="stDataFrame"] {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid var(--gray-200);
       }
-      .stButton > button[kind="primary"]:hover {filter: brightness(1.1);}
-      /* boş durum kartı */
-      .empty-card {background: #ffffff; border: 1px dashed #c7d2fe;
-        border-radius: 16px; padding: 34px; text-align: center;
-        color: #334155; margin-top: 8px;}
-      .empty-card b {color: #4338ca;}
+      .stButton > button[kind="primary"], .stDownloadButton > button {
+        background: var(--navy-700);
+        border: 1px solid var(--navy-700);
+        border-radius: 7px;
+        font-weight: 750;
+      }
+      .stButton > button[kind="primary"]:hover,
+      .stDownloadButton > button:hover {
+        background: var(--navy-600);
+        border-color: var(--navy-600);
+      }
+      .empty-card {
+        background: var(--white);
+        border: 1px dashed var(--gray-300);
+        border-radius: 8px;
+        padding: 28px;
+        text-align: center;
+        color: var(--gray-700);
+        margin-top: 8px;
+      }
+      .empty-card b {color: var(--navy-600);}
+
+      @media (max-width: 720px) {
+        [data-testid="stMain"] .block-container {
+          padding-left: 1rem;
+          padding-right: 1rem;
+        }
+        .hero {padding: 15px 16px;}
+        .stTabs [data-baseweb="tab"] {
+          padding: 6px 10px;
+          font-size: .84rem;
+        }
+      }
     </style>""", unsafe_allow_html=True)
 
 
 def hero():
     st.markdown(f"""
     <div class="hero">
-      <h1>🛡️ KAP Risk ve Erken Uyarı Platformu</h1>
-      <p>Temerrüt · Yakın izleme · Yeniden yapılandırma · Regülatör cezaları ·
-         Derecelendirme — {datetime.now().strftime('%d.%m.%Y %H:%M')} ·
-         kap.org.tr canlı verisi</p>
+      <div class="hero-eyebrow">Kurumsal Risk İzleme</div>
+      <h1>KAP Risk ve Erken Uyarı Platformu</h1>
+      <p>Temerrüt, yakın izleme, yeniden yapılandırma, regülatör cezası ve
+         derecelendirme sinyalleri · {datetime.now().strftime('%d.%m.%Y %H:%M')}
+         · kap.org.tr canlı verisi</p>
     </div>""", unsafe_allow_html=True)
 
 
