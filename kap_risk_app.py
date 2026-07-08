@@ -1824,14 +1824,77 @@ MAIL_BEKLEME_SN = 60          # oturum başına gönderimler arası bekleme
 MAIL_GUNLUK_TAVAN = 100       # tüm ziyaretçiler için günlük gönderim tavanı
 MAIL_SAYAC_DOSYA = "rapor_mail_sayaci.json"
 
+MAIL_SECRET_ALIASES = {
+    "SMTP_HOST": ("SMTP_HOST", "SMTP_SERVER", "MAIL_HOST"),
+    "SMTP_PORT": ("SMTP_PORT", "MAIL_PORT"),
+    "SMTP_USER": ("SMTP_USER", "SMTP_USERNAME", "GMAIL_USER",
+                  "EMAIL_USER", "MAIL_USER"),
+    "SMTP_PASS": ("SMTP_PASS", "SMTP_PASSWORD", "GMAIL_APP_PASSWORD",
+                  "GMAIL_APP_PASS", "GMAIL_PASSWORD", "EMAIL_PASSWORD",
+                  "MAIL_PASSWORD"),
+    "SMTP_OAUTH_TOKEN": ("SMTP_OAUTH_TOKEN", "OAUTH_TOKEN",
+                         "GMAIL_OAUTH_TOKEN", "GOOGLE_OAUTH_TOKEN"),
+    "MAIL_FROM": ("MAIL_FROM", "SMTP_FROM", "EMAIL_FROM", "FROM_EMAIL",
+                  "MAIL_SENDER"),
+}
+
+MAIL_SECRET_SECTIONS = ("smtp", "SMTP", "mail", "MAIL", "email", "EMAIL",
+                        "gmail", "GMAIL")
+
+
+def _secret_deger(secrets, canonical: str):
+    aliases = MAIL_SECRET_ALIASES[canonical]
+    top_level_keys = [key for alias in aliases
+                      for key in (alias, alias.lower())]
+    for key in top_level_keys:
+        try:
+            value = secrets.get(key)
+        except Exception:
+            value = secrets[key] if key in secrets else None
+        if value:
+            return value
+
+    nested_keys = {k.lower() for k in aliases}
+    nested_keys |= {canonical.lower(), canonical.lower().replace("smtp_", "")}
+    if canonical == "SMTP_PASS":
+        nested_keys |= {"pass", "password", "app_password", "app_pass"}
+    elif canonical == "SMTP_USER":
+        nested_keys |= {"user", "username", "login"}
+    elif canonical == "SMTP_HOST":
+        nested_keys |= {"host", "server"}
+    elif canonical == "SMTP_PORT":
+        nested_keys |= {"port"}
+    elif canonical == "MAIL_FROM":
+        nested_keys |= {"from", "sender"}
+
+    for section_name in MAIL_SECRET_SECTIONS:
+        try:
+            section = secrets.get(section_name)
+        except Exception:
+            section = secrets[section_name] if section_name in secrets else None
+        if not section:
+            continue
+        for key in nested_keys:
+            try:
+                value = section.get(key)
+            except Exception:
+                try:
+                    value = section[key]
+                except Exception:
+                    value = None
+            if value:
+                return value
+    return None
+
 
 def _mail_secrets_env():
     """Streamlit Cloud'da SMTP sırları st.secrets'tan env'e köprülenir."""
     try:
-        for k in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS",
-                  "SMTP_OAUTH_TOKEN", "MAIL_FROM"):
-            if k in st.secrets and not os.environ.get(k):
-                os.environ[k] = str(st.secrets[k])
+        for k in MAIL_SECRET_ALIASES:
+            if not os.environ.get(k):
+                value = _secret_deger(st.secrets, k)
+                if value:
+                    os.environ[k] = str(value)
     except Exception:
         pass
 

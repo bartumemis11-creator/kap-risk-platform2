@@ -36,6 +36,25 @@ def test_izleme_listesi_bos_ise_varsayilan():
     assert len(mail.izleme_listesi()) >= 1
 
 
+def test_smtp_pass_alias_okunur():
+    eski = {k: os.environ.get(k) for k in ("SMTP_PASS", "SMTP_PASSWORD")}
+    os.environ.pop("SMTP_PASS", None)
+    os.environ["SMTP_PASSWORD"] = "uygulama-parolasi"
+    try:
+        assert mail._env("SMTP_PASS") == "uygulama-parolasi"
+    finally:
+        for k, v in eski.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_streamlit_nested_smtp_secret_okunur():
+    secrets = {"smtp": {"password": "uygulama-parolasi"}}
+    assert app._secret_deger(secrets, "SMTP_PASS") == "uygulama-parolasi"
+
+
 def test_csv_bytes_bom_ve_baslik():
     veri = mail.csv_bytes([{k: "x" for k in mail.CSV_ALANLARI}])
     assert veri.startswith(b"\xef\xbb\xbf")           # UTF-8 BOM

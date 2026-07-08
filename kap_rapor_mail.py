@@ -18,6 +18,7 @@ Ortam değişkenleri (GitHub Secrets / Variables)
 -----------------------------------------------
 Zorunlu:
   SMTP_PASS   gönderen hesabın parolası — Gmail için "uygulama parolası"
+              (SMTP_PASSWORD / GMAIL_APP_PASSWORD adları da kabul edilir)
 İsteğe bağlı (varsayılanları geçersiz kılar):
   SMTP_HOST   e-posta sunucusu (varsayılan: smtp.gmail.com)
   SMTP_PORT   varsayılan 587 (STARTTLS)
@@ -54,11 +55,27 @@ VARSAYILAN_SMTP_HOST = "smtp.gmail.com"
 VARSAYILAN_FROM = "umut.okan1@gmail.com"     # gönderen (Gmail)
 VARSAYILAN_TO = "umutbasbay@hotmail.com"      # alıcı (Hotmail)
 
+ENV_ALIASES = {
+    "SMTP_HOST": ("SMTP_SERVER", "MAIL_HOST"),
+    "SMTP_PORT": ("MAIL_PORT",),
+    "SMTP_USER": ("SMTP_USERNAME", "GMAIL_USER", "EMAIL_USER", "MAIL_USER"),
+    "SMTP_PASS": ("SMTP_PASSWORD", "GMAIL_APP_PASSWORD", "GMAIL_APP_PASS",
+                  "GMAIL_PASSWORD", "EMAIL_PASSWORD", "MAIL_PASSWORD"),
+    "SMTP_OAUTH_TOKEN": ("OAUTH_TOKEN", "GMAIL_OAUTH_TOKEN",
+                         "GOOGLE_OAUTH_TOKEN"),
+    "MAIL_FROM": ("SMTP_FROM", "EMAIL_FROM", "FROM_EMAIL", "MAIL_SENDER"),
+    "MAIL_TO": ("EMAIL_TO", "TO_EMAIL", "REPORT_MAIL_TO"),
+}
+
 
 # ───────────────────────────────────────────────────── yapılandırma ──
 
 def _env(ad: str, varsayilan: str = "") -> str:
-    return (os.environ.get(ad) or varsayilan).strip()
+    for key in (ad, *ENV_ALIASES.get(ad, ())):
+        deger = os.environ.get(key)
+        if deger:
+            return deger.strip()
+    return varsayilan.strip()
 
 
 def _dogru_mu(deger: str) -> bool:
@@ -249,7 +266,8 @@ def gonder(msg: EmailMessage):
     parola = _env("SMTP_PASS")
     oauth = _env("SMTP_OAUTH_TOKEN")
     if not (parola or oauth):
-        raise SystemExit("HATA: SMTP_PASS (Gmail uygulama parolası) veya "
+        raise SystemExit("HATA: SMTP_PASS / SMTP_PASSWORD / "
+                         "GMAIL_APP_PASSWORD (Gmail uygulama parolası) veya "
                          "SMTP_OAUTH_TOKEN ortam değişkeni zorunlu.")
 
     baglam = ssl.create_default_context()
