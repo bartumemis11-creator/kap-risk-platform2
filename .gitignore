@@ -5,6 +5,9 @@ __pycache__/
 venv/
 
 # Uygulama yerel durumu ve çıktılar (repoya girmemeli)
+.env
+.env.*
+.streamlit/secrets.toml
 kap_risk_izleme_gecmis.json
 kap_risk_raporu.csv
 KAP_Risk_Raporu_*.xlsx
