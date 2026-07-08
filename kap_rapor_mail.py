@@ -40,7 +40,7 @@ import ssl
 import sys
 from datetime import date, datetime
 from email.message import EmailMessage
-from email.utils import formataddr, formatdate
+from email.utils import formataddr, formatdate, getaddresses, make_msgid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kap_risk_app as core  # noqa: E402  (kurallar/veri/rapor katmanı çekirdekten)
@@ -176,7 +176,7 @@ def risk_tablosu_html(results: list) -> str:
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee'>"
             f"<b>{m['hisse']}</b></td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;"
-            f"text-align:center'>{r['emoji']} {r['not']}</td>"
+            f"text-align:center'>{r['not']}</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;"
             f"text-align:right'>{r['skor']:.0f}/100</td>"
             f"<td style='padding:6px 10px;border-bottom:1px solid #eee;"
@@ -204,17 +204,17 @@ def mail_govdesi(results: list, years: tuple, derin: bool) -> tuple:
     toplam_bulgu = sum(len(r["findings"]) for r in results)
     mod = "derin" if derin else "hızlı"
 
-    konu = f"KAP Risk Raporu — {tarih}"
+    konu = f"KAP Risk Raporu - {tarih}"
     if kritik:
         adlar = ", ".join(r["member"]["hisse"]
                           for r in sorted(kritik, key=lambda r: -r["skor"]))
-        konu += f" · 🔴 {len(kritik)} acil ({adlar})"
+        konu += f" - {len(kritik)} acil ({adlar})"
     else:
-        konu += f" · {toplam_bulgu} sinyal"
+        konu += f" - {toplam_bulgu} sinyal"
 
     ozet_md = core.executive_summary_text(results)
     baslik = (f"<h2 style='color:#1F3864;font-family:Segoe UI,Arial,sans-serif;"
-              f"margin:0 0 4px'>🛡️ KAP Risk İzleme Raporu</h2>"
+              f"margin:0 0 4px'>KAP Risk İzleme Raporu</h2>"
               f"<p style='color:#777;font-family:Segoe UI,Arial,sans-serif;"
               f"margin:0 0 16px;font-size:13px'>{tarih} · {years[0]}–{years[-1]} "
               f"dönemi · {mod} analiz · {len(results)} şirket</p>")
@@ -239,23 +239,69 @@ def mail_govdesi(results: list, years: tuple, derin: bool) -> tuple:
 
 # ──────────────────────────────────────────────────────── gönderim ──
 
+def _msg_ustbilgi(msg: EmailMessage, gonderen: str):
+    domain = gonderen.rsplit("@", 1)[-1] if "@" in gonderen else None
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=domain)
+    msg["Reply-To"] = gonderen
+    msg["X-Mailer"] = "KAP Risk Izleme Platformu"
+
+
+def _mesaj_alicilari(msg: EmailMessage) -> list[str]:
+    adresler = getaddresses(msg.get_all("To", [])
+                            + msg.get_all("Cc", [])
+                            + msg.get_all("Bcc", []))
+    return [addr.strip() for _, addr in adresler if addr.strip()]
+
+
 def mail_olustur(konu, duz, html, gonderen, alicilar,
-                 excel_bytes, csv_veri, tarih_str) -> EmailMessage:
+                 excel_bytes, csv_veri, tarih_str,
+                 ekleri_ekle: bool = True) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = konu
-    msg["From"] = formataddr(("KAP Risk İzleme", gonderen))
+    msg["From"] = formataddr(("KAP Risk Izleme", gonderen))
     msg["To"] = ", ".join(alicilar)
-    msg["Date"] = formatdate(localtime=True)
+    _msg_ustbilgi(msg, gonderen)
     msg.set_content(duz)
     msg.add_alternative(html, subtype="html")
 
-    msg.add_attachment(
-        excel_bytes, maintype="application",
-        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"KAP_Risk_Raporu_{tarih_str}.xlsx")
-    msg.add_attachment(
-        csv_veri, maintype="text", subtype="csv",
-        filename=f"KAP_Risk_Bulgular_{tarih_str}.csv")
+    if ekleri_ekle:
+        msg.add_attachment(
+            excel_bytes, maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=f"KAP_Risk_Raporu_{tarih_str}.xlsx")
+        msg.add_attachment(
+            csv_veri, maintype="text", subtype="csv",
+            filename=f"KAP_Risk_Bulgular_{tarih_str}.csv")
+    return msg
+
+
+def test_mail_olustur(gonderen: str, alicilar: list[str]) -> EmailMessage:
+    tarih = datetime.now().strftime("%d.%m.%Y %H:%M")
+    konu = f"KAP Risk mail testi - {tarih}"
+    duz = (
+        "Bu e-posta KAP Risk Izleme Platformu SMTP ayar testi icin "
+        "gonderildi.\n\n"
+        "Bu test mesajinda ek dosya yoktur. Bu mesaj geliyor ama rapor "
+        "maili gorunmuyorsa alici kurum Excel/CSV eklerini spam veya "
+        "karantina filtresine aliyor olabilir.\n"
+    )
+    html = (
+        "<div style='font-family:Segoe UI,Arial,sans-serif;color:#1f2937'>"
+        "<h2 style='color:#1F3864;margin:0 0 8px'>KAP Risk mail testi</h2>"
+        "<p>SMTP ayarlari calisiyor. Bu test mesajinda ek dosya yoktur.</p>"
+        "<p style='color:#64748b'>Bu mesaj geliyor ama rapor maili "
+        "gorunmuyorsa alici kurum Excel/CSV eklerini spam veya karantina "
+        "filtresine aliyor olabilir.</p>"
+        "</div>"
+    )
+    msg = EmailMessage()
+    msg["Subject"] = konu
+    msg["From"] = formataddr(("KAP Risk Izleme", gonderen))
+    msg["To"] = ", ".join(alicilar)
+    _msg_ustbilgi(msg, gonderen)
+    msg.set_content(duz)
+    msg.add_alternative(html, subtype="html")
     return msg
 
 
@@ -282,7 +328,21 @@ def gonder(msg: EmailMessage):
                     + base64.b64encode(xoauth.encode()).decode())
         else:
             s.login(user, parola)
-        s.send_message(msg)
+        alicilar = _mesaj_alicilari(msg)
+        if not alicilar:
+            raise RuntimeError("E-posta alicisi bulunamadi.")
+        reddedilen = s.send_message(msg, from_addr=user, to_addrs=alicilar)
+        if reddedilen:
+            detay = ", ".join(f"{k}: {v}" for k, v in reddedilen.items())
+            raise RuntimeError(f"SMTP aliciyi reddetti: {detay}")
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "from": msg.get("From", ""),
+        "to": msg.get("To", ""),
+        "message_id": msg.get("Message-ID", ""),
+    }
 
 
 # ─────────────────────────────────────────────────────────── main ──

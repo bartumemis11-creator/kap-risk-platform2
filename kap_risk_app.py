@@ -1821,6 +1821,7 @@ def _news_card(n) -> str:
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAIL_BEKLEME_SN = 60          # oturum başına gönderimler arası bekleme
+MAIL_TEST_BEKLEME_SN = 30     # eksiz test gönderimleri arası bekleme
 MAIL_GUNLUK_TAVAN = 100       # tüm ziyaretçiler için günlük gönderim tavanı
 MAIL_SAYAC_DOSYA = "rapor_mail_sayaci.json"
 
@@ -1925,7 +1926,19 @@ def _mail_tavan_bump():
         pass
 
 
-def talep_mail_gonder(alici: str, results, years, deep, xls) -> tuple:
+def _mail_gonderen(mailer) -> str:
+    host = mailer._env("SMTP_HOST", mailer.VARSAYILAN_SMTP_HOST).lower()
+    user = mailer._env("SMTP_USER")
+    mail_from = mailer._env("MAIL_FROM")
+    # Gmail SMTP'de From adresi giriş yapılan hesapla aynı olmazsa bazı
+    # kurumsal alıcılar mesajı sessizce karantinaya alabiliyor.
+    if "gmail" in host and user:
+        return user
+    return mail_from or user or mailer.VARSAYILAN_FROM
+
+
+def talep_mail_gonder(alici: str, results, years, deep, xls,
+                      ekleri_ekle: bool = True) -> tuple:
     """Mevcut tarama raporunu girilen adrese gönderir."""
     alici = (alici or "").strip()
     if not EMAIL_RE.match(alici):
@@ -1943,17 +1956,28 @@ def talep_mail_gonder(alici: str, results, years, deep, xls) -> tuple:
     import kap_rapor_mail as mailer
     _mail_secrets_env()
     try:
-        excel = xls or build_excel(results, years, deep)
-        satirlar = [{k: f.get(k, "") for k in mailer.CSV_ALANLARI}
-                    for r in results for f in r["findings"]]
-        csv_veri = mailer.csv_bytes(satirlar)
+        excel = xls or build_excel(results, years, deep) if ekleri_ekle else b""
+        satirlar = (
+            [{k: f.get(k, "") for k in mailer.CSV_ALANLARI}
+             for r in results for f in r["findings"]]
+            if ekleri_ekle else []
+        )
+        csv_veri = mailer.csv_bytes(satirlar) if ekleri_ekle else b""
         konu, duz, html = mailer.mail_govdesi(results, years, deep)
-        gonderen = (os.environ.get("MAIL_FROM") or os.environ.get("SMTP_USER")
-                    or mailer.VARSAYILAN_FROM)
+        if not ekleri_ekle:
+            konu += " - eksiz ozet"
+            duz += ("\n\nNot: Bu mesaj kurumsal e-posta filtrelerine takılmaması "
+                    "için ek dosya içermeyen özet olarak gönderildi.")
+            html += ("<p style='color:#64748b;font-size:12px;"
+                     "font-family:Segoe UI,Arial,sans-serif'>Bu mesaj kurumsal "
+                     "e-posta filtrelerine takılmaması için ek dosya içermeyen "
+                     "özet olarak gönderildi.</p>")
+        gonderen = _mail_gonderen(mailer)
         stamp = datetime.now(ISTANBUL_TZ).strftime("%Y%m%d_%H%M")
         msg = mailer.mail_olustur(konu, duz, html, gonderen, [alici],
-                                  excel, csv_veri, stamp)
-        mailer.gonder(msg)
+                                  excel, csv_veri, stamp,
+                                  ekleri_ekle=ekleri_ekle)
+        sonuc = mailer.gonder(msg)
     except SystemExit as exc:
         return False, (f"E-posta gönderilemedi (yapılandırma): {exc} "
                        "Yöneticiye SMTP_PASS ayarını hatırlatın.")
@@ -1962,7 +1986,42 @@ def talep_mail_gonder(alici: str, results, years, deep, xls) -> tuple:
 
     st.session_state["_mail_son_ts"] = time.time()
     _mail_tavan_bump()
-    return True, f"Rapor {alici} adresine gönderildi."
+    msg_id = sonuc.get("message_id") if isinstance(sonuc, dict) else ""
+    ek = f" Mesaj kimliği: {msg_id}" if msg_id else ""
+    tur = "eksiz özet raporu" if not ekleri_ekle else "ekli raporu"
+    return True, (f"SMTP sunucusu {tur} {alici} adresi için kabul etti."
+                  f"{ek} Gmail dışı kutuda görünmüyorsa spam/karantina ve "
+                  "kurumsal dış gönderici filtresini kontrol edin.")
+
+
+def talep_test_mail_gonder(alici: str) -> tuple:
+    """Ek dosyasız SMTP test maili gönderir."""
+    alici = (alici or "").strip()
+    if not EMAIL_RE.match(alici):
+        return False, "Geçerli bir e-posta adresi girin."
+    son = st.session_state.get("_mail_test_son_ts", 0.0)
+    kalan = MAIL_TEST_BEKLEME_SN - (time.time() - son)
+    if kalan > 0:
+        return False, f"Çok sık test. {int(kalan)} sn sonra tekrar deneyin."
+
+    import kap_rapor_mail as mailer
+    _mail_secrets_env()
+    try:
+        gonderen = _mail_gonderen(mailer)
+        msg = mailer.test_mail_olustur(gonderen, [alici])
+        sonuc = mailer.gonder(msg)
+    except SystemExit as exc:
+        return False, (f"Test e-postası gönderilemedi (yapılandırma): {exc} "
+                       "SMTP_PASS ayarını kontrol edin.")
+    except Exception as exc:
+        return False, f"Test e-postası gönderilemedi: {exc}"
+
+    st.session_state["_mail_test_son_ts"] = time.time()
+    msg_id = sonuc.get("message_id") if isinstance(sonuc, dict) else ""
+    ek = f" Mesaj kimliği: {msg_id}" if msg_id else ""
+    return True, (f"Eksiz test maili {alici} adresi için SMTP tarafından "
+                  f"kabul edildi.{ek}")
+
 
 
 def render_dashboard(results, years, deep, news=None, date_range=None):
@@ -2225,15 +2284,30 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
         st.markdown("### Raporu E-posta ile İste")
         st.caption(
             "Mevcut tarama raporunu Excel ve CSV ekleriyle doğrudan "
-            "e-posta adresinize gönderebilirsiniz.")
+            "e-posta adresinize gönderebilirsiniz. Kurumsal e-posta "
+            "adreslerinde önce eksiz test mailini deneyin.")
         with st.form("rapor_mail_talep", clear_on_submit=False):
             alici = st.text_input("E-posta adresi",
-                                  placeholder="ad.soyad@ornek.com")
-            gonder_btn = st.form_submit_button("Raporu Gönder")
+                                  placeholder="umutokan.basbay@halkbank.com.tr")
+            c_mail, c_ozet, c_test = st.columns([1, 1, 1])
+            gonder_btn = c_mail.form_submit_button("Ekli Raporu Gönder")
+            ozet_btn = c_ozet.form_submit_button("Eksiz Özet Gönder")
+            test_btn = c_test.form_submit_button("Test Maili Gönder")
+        if test_btn:
+            with st.spinner("Eksiz test maili gönderiliyor..."):
+                basarili, mesaj = talep_test_mail_gonder(alici)
+            (st.success if basarili else st.warning)(mesaj)
+        if ozet_btn:
+            with st.spinner("Eksiz özet raporu gönderiliyor..."):
+                basarili, mesaj = talep_mail_gonder(alici, ok, years,
+                                                     deep, xls,
+                                                     ekleri_ekle=False)
+            (st.success if basarili else st.warning)(mesaj)
         if gonder_btn:
             with st.spinner("Rapor gönderiliyor..."):
                 basarili, mesaj = talep_mail_gonder(alici, ok, years,
-                                                     deep, xls)
+                                                     deep, xls,
+                                                     ekleri_ekle=True)
             (st.success if basarili else st.warning)(mesaj)
 
 

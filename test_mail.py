@@ -92,11 +92,46 @@ def test_mail_olustur_iki_ek_ve_alicilar():
         ["a@k.com", "b@k.com"], b"excel", b"csv", "20260707")
     assert msg["Subject"] == "konu"
     assert msg["To"] == "a@k.com, b@k.com"
+    assert msg["Reply-To"] == "gonderen@x.com"
+    assert msg["Message-ID"]
     ekler = [p for p in msg.iter_attachments()]
     assert len(ekler) == 2
     adlar = sorted(p.get_filename() for p in ekler)
     assert adlar == ["KAP_Risk_Bulgular_20260707.csv",
                      "KAP_Risk_Raporu_20260707.xlsx"]
+
+
+def test_mail_olustur_eksiz_rapor():
+    msg = mail.mail_olustur(
+        "konu", "duz", "<p>html</p>", "gonderen@x.com",
+        ["a@k.com"], b"excel", b"csv", "20260707",
+        ekleri_ekle=False)
+    assert msg["To"] == "a@k.com"
+    assert list(msg.iter_attachments()) == []
+
+
+def test_test_mail_olustur_eksiz():
+    msg = mail.test_mail_olustur("gonderen@x.com", ["a@k.com"])
+    assert "test" in msg["Subject"].lower()
+    assert msg["To"] == "a@k.com"
+    assert msg["Message-ID"]
+    assert list(msg.iter_attachments()) == []
+
+
+def test_gmail_smtp_gondereni_kullanir():
+    keys = ("SMTP_HOST", "SMTP_USER", "MAIL_FROM")
+    eski = {k: os.environ.get(k) for k in keys}
+    os.environ["SMTP_HOST"] = "smtp.gmail.com"
+    os.environ["SMTP_USER"] = "giris@gmail.com"
+    os.environ["MAIL_FROM"] = "baska@ornek.com"
+    try:
+        assert app._mail_gonderen(mail) == "giris@gmail.com"
+    finally:
+        for k, v in eski.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def test_email_regex():
