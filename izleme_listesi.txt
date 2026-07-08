@@ -1,0 +1,15 @@
+# KAP Risk İzleme — günlük mail için izlenecek hisse kodları
+# Her satıra bir kod yazın (virgül de kullanılabilir). '#' ile başlayan satırlar yorumdur.
+# Bu dosya git'e commit'lenir (gizli değildir). Repo Settings → Variables'ta
+# IZLEME_LISTESI değişkeni tanımlıysa o öncelik kazanır ve bu dosya yok sayılır.
+
+KONTR
+MARTI
+GSRAY
+FENER
+VESTL
+SASA
+IHLAS
+THYAO
+TUPRS
+YKBNK

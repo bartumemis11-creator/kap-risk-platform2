@@ -1,0 +1,30 @@
+{
+  "_comment": "Proje ayarlari (ekiple paylasilir, git'e girer). Kisisel/gizli ayarlar .claude/settings.local.json'a. NOT: Izin eslesmesi ONEK tabanlidir; ortadan/bastan joker (Bash(*prod*)) guvenilmez. Kesin bloklama icin PreToolUse hook + exit 2. settings.json icin resmi $schema URL'i yoktur.",
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Bash(python:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pytest:*)",
+      "Bash(streamlit run:*)",
+      "Bash(pip install:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "WebFetch(domain:kap.org.tr)",
+      "WebFetch(domain:docs.anthropic.com)"
+    ],
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Edit(requirements.txt)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  }
+}

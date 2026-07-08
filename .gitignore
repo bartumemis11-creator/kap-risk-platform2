@@ -9,13 +9,19 @@ kap_risk_izleme_gecmis.json
 kap_risk_raporu.csv
 KAP_Risk_Raporu_*.xlsx
 KAP_Risk_Bulgular_*.csv
+rapor_mail_sayaci.json
 
 # Editör / işletim sistemi
 .idea/
 .vscode/
 Thumbs.db
 .DS_Store
-.claude/
+
+# Claude Code — paylaşılan config (CLAUDE.md, .claude/settings.json, .claude/agents/) commit edilir;
+# sadece kişisel/yerel dosyalar hariç tutulur
+.claude/settings.local.json
+.claude/launch.json
+.claude/*.lock
 
 # Bu klasördeki, depoyla ilgisiz yerel çalışmalar (yanlışlıkla yayınlanmasın)
 sunu_template/

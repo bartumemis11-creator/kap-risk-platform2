@@ -1817,6 +1817,91 @@ def _news_card(n) -> str:
 </div>"""
 
 
+# ═══════════════════════════════════════════════ talep üzerine e-posta ════
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MAIL_BEKLEME_SN = 60          # oturum başına gönderimler arası bekleme
+MAIL_GUNLUK_TAVAN = 100       # tüm ziyaretçiler için günlük gönderim tavanı
+MAIL_SAYAC_DOSYA = "rapor_mail_sayaci.json"
+
+
+def _mail_secrets_env():
+    """Streamlit Cloud'da SMTP sırları st.secrets'tan env'e köprülenir."""
+    try:
+        for k in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS",
+                  "SMTP_OAUTH_TOKEN", "MAIL_FROM"):
+            if k in st.secrets and not os.environ.get(k):
+                os.environ[k] = str(st.secrets[k])
+    except Exception:
+        pass
+
+
+def _mail_tavan_oku() -> dict:
+    bugun = date.today().isoformat()
+    try:
+        with open(MAIL_SAYAC_DOSYA, encoding="utf-8") as fh:
+            veri = json.load(fh)
+    except Exception:
+        veri = {}
+    if veri.get("tarih") != bugun:
+        veri = {"tarih": bugun, "sayi": 0}
+    return veri
+
+
+def _mail_tavan_uygun() -> bool:
+    return _mail_tavan_oku().get("sayi", 0) < MAIL_GUNLUK_TAVAN
+
+
+def _mail_tavan_bump():
+    veri = _mail_tavan_oku()
+    veri["sayi"] = veri.get("sayi", 0) + 1
+    try:
+        with open(MAIL_SAYAC_DOSYA, "w", encoding="utf-8") as fh:
+            json.dump(veri, fh)
+    except Exception:
+        pass
+
+
+def talep_mail_gonder(alici: str, results, years, deep, xls) -> tuple:
+    """Mevcut tarama raporunu girilen adrese gönderir."""
+    alici = (alici or "").strip()
+    if not EMAIL_RE.match(alici):
+        return False, "Geçerli bir e-posta adresi girin."
+    if not results:
+        return False, "Önce bir tarama çalıştırın; gönderilecek rapor yok."
+    son = st.session_state.get("_mail_son_ts", 0.0)
+    kalan = MAIL_BEKLEME_SN - (time.time() - son)
+    if kalan > 0:
+        return False, f"Çok sık talep. {int(kalan)} sn sonra tekrar deneyin."
+    if not _mail_tavan_uygun():
+        return False, ("Günlük e-posta gönderim tavanına ulaşıldı; "
+                       "raporu yukarıdaki düğmeden indirebilirsiniz.")
+
+    import kap_rapor_mail as mailer
+    _mail_secrets_env()
+    try:
+        excel = xls or build_excel(results, years, deep)
+        satirlar = [{k: f.get(k, "") for k in mailer.CSV_ALANLARI}
+                    for r in results for f in r["findings"]]
+        csv_veri = mailer.csv_bytes(satirlar)
+        konu, duz, html = mailer.mail_govdesi(results, years, deep)
+        gonderen = (os.environ.get("MAIL_FROM") or os.environ.get("SMTP_USER")
+                    or mailer.VARSAYILAN_FROM)
+        stamp = datetime.now(ISTANBUL_TZ).strftime("%Y%m%d_%H%M")
+        msg = mailer.mail_olustur(konu, duz, html, gonderen, [alici],
+                                  excel, csv_veri, stamp)
+        mailer.gonder(msg)
+    except SystemExit as exc:
+        return False, (f"E-posta gönderilemedi (yapılandırma): {exc} "
+                       "Yöneticiye SMTP_PASS ayarını hatırlatın.")
+    except Exception as exc:
+        return False, f"E-posta gönderilemedi: {exc}"
+
+    st.session_state["_mail_son_ts"] = time.time()
+    _mail_tavan_bump()
+    return True, f"Rapor {alici} adresine gönderildi."
+
+
 def render_dashboard(results, years, deep, news=None, date_range=None):
     ok = [r for r in results if "hata" not in r]
     no_data = [r for r in ok
@@ -2072,6 +2157,21 @@ def render_dashboard(results, years, deep, news=None, date_range=None):
                 "Ham Bulgular (.csv)",
                 data=csv_df.to_csv(index=False).encode("utf-8-sig"),
                 file_name=f"KAP_Risk_Bulgular_{stamp}.csv", mime="text/csv")
+
+        st.divider()
+        st.markdown("### Raporu E-posta ile İste")
+        st.caption(
+            "Mevcut tarama raporunu Excel ve CSV ekleriyle doğrudan "
+            "e-posta adresinize gönderebilirsiniz.")
+        with st.form("rapor_mail_talep", clear_on_submit=False):
+            alici = st.text_input("E-posta adresi",
+                                  placeholder="ad.soyad@ornek.com")
+            gonder_btn = st.form_submit_button("Raporu Gönder")
+        if gonder_btn:
+            with st.spinner("Rapor gönderiliyor..."):
+                basarili, mesaj = talep_mail_gonder(alici, ok, years,
+                                                     deep, xls)
+            (st.success if basarili else st.warning)(mesaj)
 
 
 def main():

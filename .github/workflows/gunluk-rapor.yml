@@ -1,0 +1,46 @@
+name: Günlük KAP Risk Raporu
+
+# Her sabah 10:00 (Türkiye, UTC+3) = 07:00 UTC.
+# Not: GitHub Actions zamanlaması yoğunlukta birkaç dakika gecikebilir.
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}       # gerektiğinde elle tetikleme
+
+concurrency:
+  group: gunluk-rapor
+  cancel-in-progress: false
+
+jobs:
+  rapor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Depoyu al
+        uses: actions/checkout@v4
+
+      - name: Python 3.13 kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+
+      - name: Taramayı çalıştır ve raporu mail'le
+        # Varsayılan akış koda gömülü: umut.okan1@gmail.com → umutbasbay@hotmail.com.
+        # Tek zorunlu gizli bilgi SMTP_PASS (Gmail uygulama parolası).
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_OAUTH_TOKEN: ${{ secrets.SMTP_OAUTH_TOKEN }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          # İzleme listesi ve mod: repo Settings → Variables (gizli değil)
+          IZLEME_LISTESI: ${{ vars.IZLEME_LISTESI }}
+          TARAMA_YIL: ${{ vars.TARAMA_YIL }}
+          DERIN: ${{ vars.DERIN || '1' }}
+        run: python kap_rapor_mail.py
